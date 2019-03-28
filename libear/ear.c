@@ -31,6 +31,10 @@
  * This is passed as environment variable.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "config.h"
 
 #include <stddef.h>
@@ -80,11 +84,19 @@ extern char **environ;
 
 #define ERROR_AND_EXIT(msg) do { PERROR(msg); exit(EXIT_FAILURE); } while (0)
 
+#ifdef __CYGWIN__
+#include <sys/cygwin.h>
+void *RTLD_NEXT = NULL;
+#endif
+
 #define DLSYM(TYPE_, VAR_, SYMBOL_)                                 \
     union {                                                         \
         void *from;                                                 \
         TYPE_ to;                                                   \
     } cast;                                                         \
+    if (!RTLD_NEXT) {    					    \
+        RTLD_NEXT = dlopen("cygwin1.dll", 0);                       \
+    }								    \
     if (0 == (cast.from = dlsym(RTLD_NEXT, SYMBOL_))) {             \
         PERROR("dlsym");                                            \
         exit(EXIT_FAILURE);                                         \
@@ -106,6 +118,21 @@ static char const **string_array_from_varargs(char const *arg, va_list *ap);
 static char const **string_array_copy(char const **const in);
 static size_t string_array_length(char const *const *in);
 static void string_array_release(char const **);
+
+#ifdef __CYGWIN__
+__attribute__((constructor))
+void _init(void) {
+    cygwin_internal(CW_HOOK, "execl", execl);
+    cygwin_internal(CW_HOOK, "execle", execle);
+    cygwin_internal(CW_HOOK, "execlp", execlp);
+    cygwin_internal(CW_HOOK, "execv", execv);
+    cygwin_internal(CW_HOOK, "execve", execve);
+    cygwin_internal(CW_HOOK, "execvp", execvp);
+    cygwin_internal(CW_HOOK, "execvpe", execvpe);
+    cygwin_internal(CW_HOOK, "posix_spawn", posix_spawn);
+    cygwin_internal(CW_HOOK, "posix_spawnp", posix_spawnp);
+}
+#endif
 
 
 static bear_env_t env_names =
